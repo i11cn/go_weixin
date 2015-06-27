@@ -59,6 +59,17 @@ type OnRequestError func(w http.ResponseWriter, r *http.Request)
 type OnTextRequest func(w http.ResponseWriter, info *WXRequestInfo, text *WXTextRequest)
 type OnLocationRequest func(w http.ResponseWriter, info *WXRequestInfo, pos *WXLocationRequest)
 
+func (info *WXRequestInfo) Response(w http.ResponseWriter, v interface{}) {
+	output, err := xml.MarshalIndent(v, "", "")
+	if err != nil {
+		go_logger.GetLogger("weixin").Error("创建响应xml失败:", err.Error())
+		w.WriteHeader(500)
+		return
+	}
+	w.Write(output)
+	go_logger.GetLogger("weixin").Trace("给用户返回响应:", string(output))
+}
+
 func (info *WXRequestInfo) ResponseText(w http.ResponseWriter, content string) {
 	resp := WXTextResponse{}
 	resp.ToUserName = info.FromUserName
@@ -66,12 +77,7 @@ func (info *WXRequestInfo) ResponseText(w http.ResponseWriter, content string) {
 	resp.CreateTime = time.Now().Unix()
 	resp.MsgType = "text"
 	resp.Content = content
-	output, err := xml.MarshalIndent(resp, "", "")
-	if err != nil {
-		go_logger.GetLogger("weixin").Error("创建响应xml失败:", err.Error())
-	}
-	w.Write(output)
-	go_logger.GetLogger("weixin").Trace("给用户返回响应:", string(output))
+	info.Response(w, resp)
 }
 
 func NewWeixinServ(conf *WXConfig, uc interface{}) *Weixin {
