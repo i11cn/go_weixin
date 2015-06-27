@@ -2,6 +2,7 @@ package weixin
 
 import (
 	"crypto/sha1"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"github.com/i11cn/go_logger"
@@ -10,6 +11,7 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
+	"time"
 )
 
 func exist_all_values(values url.Values, keys []string) bool {
@@ -74,10 +76,30 @@ func (serv *Weixin) init() bool {
 	} else {
 		serv.onLocationRequest = serv.OnPostLocation
 	}
+	go serv.get_access_token()
 	return true
 }
 
+type access_token_json struct {
+	AccessToken string `json:"access_token"`
+	Expire      int    `json:"expires_in"`
+}
+
 func (serv *Weixin) get_access_token() {
+	url := fmt.Sprintf("https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=%s&secret=%s", serv.AppID, serv.AppSecret)
+	if resp, err := http.Get(url); err == nil {
+		defer resp.Body.Close()
+		body, _ := ioutil.ReadAll(resp.Body)
+		d := access_token_json{}
+		if err = json.Unmarshal(body, &d); err == nil {
+			serv.AccessToken = d.AccessToken
+			time.Sleep(time.Duration(d.Expire-100) * time.Second)
+			go serv.get_access_token()
+			return
+		}
+	}
+	time.Sleep(10 * time.Second)
+	go serv.get_access_token()
 }
 
 func (serv *Weixin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
