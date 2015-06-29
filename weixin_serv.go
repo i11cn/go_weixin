@@ -18,6 +18,11 @@ type Weixin struct {
 
 	onTextRequest     OnTextRequest
 	onLocationRequest OnLocationRequest
+	onSubscribeEvent  OnSubscribeEvent
+	onQRScanEvent     OnQRScanEvent
+	onLocationEvent   OnLocationEvent
+	onMenuEvent       OnMenuEvent
+	onLinkEvent       OnLinkEvent
 }
 
 func (serv *Weixin) ServeHTTP(w http.ResponseWriter, r *http.Request) {

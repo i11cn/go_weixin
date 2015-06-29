@@ -7,57 +7,127 @@ import (
 	"time"
 )
 
-type WXRequestInfo struct {
-	ToUserName   string
-	FromUserName string
-	CreateTime   time.Duration
-	MsgId        int64
-}
+type (
+	WXRequestInfo struct {
+		ToUserName   string
+		FromUserName string
+		CreateTime   time.Duration
+		MsgId        int64
+	}
 
-type WXTextRequest struct {
-	Content string
-}
+	WXLocationRequest struct {
+		Location_Y float64
+		Location_X float64
+		Scale      int
+		Label      string
+	}
 
-type WXLocationRequest struct {
-	Location_X float64
-	Location_Y float64
-	Scale      int
-	Label      string
-}
+	WXLinkRequest struct {
+		Title       string
+		Description string
+		Url         string
+	}
 
-type WXRequest struct {
-	WXRequestInfo
-	MsgType string
-	WXTextRequest
-	WXLocationRequest
-}
+	WXLocationEvent struct {
+		Longitude float64
+		Latitude  float64
+		Precision float64
+	}
 
-type WXResponseInfo struct {
-	XMLName      xml.Name `xml:"xml"`
-	ToUserName   string
-	FromUserName string
-	CreateTime   int64
-}
+	WXEvent struct {
+		Event    string
+		EventKey string
+		Ticket   string
+		WXLocationEvent
+	}
 
-type WXTextResponse struct {
-	WXResponseInfo
-	MsgType string
-	Content string
-}
+	WXRequest struct {
+		WXRequestInfo
+		MsgType string
+		Content string
+		WXLocationRequest
+		WXLinkRequest
+		MediaId      string
+		PicUrl       string
+		Format       string
+		ThumbMediaId string
+		WXEvent
+	}
 
-type WXConfig struct {
-	Token     string
-	MsgKey    string
-	AppID     string
-	AppSecret string
-}
+	WXResponseInfo struct {
+		XMLName      xml.Name `xml:"xml"`
+		ToUserName   string
+		FromUserName string
+		CreateTime   int64
+		MsgType      string
+	}
 
-type OnValidateFail func(w http.ResponseWriter, r *http.Request)
-type UnsupportedRequest func(w http.ResponseWriter, info *WXRequestInfo)
-type OnRequestError func(w http.ResponseWriter, r *http.Request)
+	WXTextResponse struct {
+		WXResponseInfo
+		Content string
+	}
 
-type OnTextRequest func(w http.ResponseWriter, info *WXRequestInfo, text *WXTextRequest)
-type OnLocationRequest func(w http.ResponseWriter, info *WXRequestInfo, pos *WXLocationRequest)
+	WXImageResponse struct {
+		WXResponseInfo
+		MediaId string `xml:"Image>MediaId"`
+	}
+
+	WXVoiceResponse struct {
+		WXResponseInfo
+		MediaId string `xml:"Voice>MediaId"`
+	}
+
+	WXVideoResponse struct {
+		WXResponseInfo
+		MediaId     string `xml:"Video>MediaId"`
+		Title       string `xml:"Video>Title"`
+		Description string `xml:"Video>Description"`
+	}
+
+	WXMusicResponse struct {
+		WXResponseInfo
+		Title        string `xml:"Music>Title"`
+		Description  string `xml:"Music>Description"`
+		MusicUrl     string `xml:"Music>MusicUrl"`
+		HQMusicUrl   string `xml:"Music>HQMusicUrl"`
+		ThumbMediaId string `xml:"Music>ThumbMediaId"`
+	}
+
+	WXNewsItem struct {
+		Title       string
+		Description string
+		PicUrl      string
+		Url         string
+	}
+
+	WXNewsResponse struct {
+		WXResponseInfo
+		ArticleCount int
+		News         WXNewsItem `xml:"Articles>item"`
+	}
+
+	WXConfig struct {
+		Token     string
+		MsgKey    string
+		AppID     string
+		AppSecret string
+	}
+)
+
+type (
+	OnValidateFail     func(w http.ResponseWriter, r *http.Request)
+	UnsupportedRequest func(w http.ResponseWriter, info *WXRequestInfo)
+	OnRequestError     func(w http.ResponseWriter, r *http.Request)
+
+	OnTextRequest     func(w http.ResponseWriter, info *WXRequestInfo, content *string)
+	OnLocationRequest func(w http.ResponseWriter, info *WXRequestInfo, pos *WXLocationRequest)
+
+	OnSubscribeEvent func(w http.ResponseWriter, info *WXRequestInfo, sub bool)
+	OnQRScanEvent    func(w http.ResponseWriter, info *WXRequestInfo, key, ticket string)
+	OnLocationEvent  func(w http.ResponseWriter, info *WXRequestInfo, pos *WXLocationEvent)
+	OnMenuEvent      func(w http.ResponseWriter, info *WXRequestInfo, key string)
+	OnLinkEvent      func(w http.ResponseWriter, info *WXRequestInfo, url string)
+)
 
 func (info *WXRequestInfo) Response(w http.ResponseWriter, v interface{}) {
 	output, err := xml.MarshalIndent(v, "", "")
@@ -77,6 +147,52 @@ func (info *WXRequestInfo) ResponseText(w http.ResponseWriter, content string) {
 	resp.CreateTime = time.Now().Unix()
 	resp.MsgType = "text"
 	resp.Content = content
+	info.Response(w, resp)
+}
+
+func (info *WXRequestInfo) ResponseImage(w http.ResponseWriter, id string) {
+	resp := WXImageResponse{}
+	resp.ToUserName = info.FromUserName
+	resp.FromUserName = info.ToUserName
+	resp.CreateTime = time.Now().Unix()
+	resp.MsgType = "image"
+	resp.MediaId = id
+	info.Response(w, resp)
+}
+
+func (info *WXRequestInfo) ResponseVoice(w http.ResponseWriter, id string) {
+	resp := WXVoiceResponse{}
+	resp.ToUserName = info.FromUserName
+	resp.FromUserName = info.ToUserName
+	resp.CreateTime = time.Now().Unix()
+	resp.MsgType = "voice"
+	resp.MediaId = id
+	info.Response(w, resp)
+}
+
+func (info *WXRequestInfo) ResponseVideo(w http.ResponseWriter, id, title, desc string) {
+	resp := WXVideoResponse{}
+	resp.ToUserName = info.FromUserName
+	resp.FromUserName = info.ToUserName
+	resp.CreateTime = time.Now().Unix()
+	resp.MsgType = "video"
+	resp.MediaId = id
+	resp.Title = title
+	resp.Description = desc
+	info.Response(w, resp)
+}
+
+func (info *WXRequestInfo) ResponseMusic(w http.ResponseWriter, id, title, desc, url, hqurl string) {
+	resp := WXMusicResponse{}
+	resp.ToUserName = info.FromUserName
+	resp.FromUserName = info.ToUserName
+	resp.CreateTime = time.Now().Unix()
+	resp.MsgType = "music"
+	resp.ThumbMediaId = id
+	resp.Title = title
+	resp.Description = desc
+	resp.MusicUrl = url
+	resp.HQMusicUrl = hqurl
 	info.Response(w, resp)
 }
 
