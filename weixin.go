@@ -119,8 +119,12 @@ type (
 	UnsupportedRequest func(w http.ResponseWriter, info *WXRequestInfo)
 	OnRequestError     func(w http.ResponseWriter, r *http.Request)
 
-	OnTextRequest     func(w http.ResponseWriter, info *WXRequestInfo, content *string)
+	OnTextRequest     func(w http.ResponseWriter, info *WXRequestInfo, content string)
 	OnLocationRequest func(w http.ResponseWriter, info *WXRequestInfo, pos *WXLocationRequest)
+	OnImageRequest    func(w http.ResponseWriter, info *WXRequestInfo, mid, url string)
+	OnVoiceRequest    func(w http.ResponseWriter, info *WXRequestInfo, mid, format string)
+	OnVideoRequest    func(w http.ResponseWriter, info *WXRequestInfo, mid, thumb string, short bool)
+	OnLinkRequest     func(w http.ResponseWriter, info *WXRequestInfo, req *WXLinkRequest)
 
 	OnSubscribeEvent func(w http.ResponseWriter, info *WXRequestInfo, sub bool)
 	OnQRScanEvent    func(w http.ResponseWriter, info *WXRequestInfo, key, ticket string)

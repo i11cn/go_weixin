@@ -22,92 +22,66 @@ func exist_all_values(values url.Values, keys []string) bool {
 	return true
 }
 
+func (serv *Weixin) resp_unsupport(in []reflect.Value) []reflect.Value {
+	if w, ok := in[0].Interface().(http.ResponseWriter); ok {
+		if info, ok := in[1].Interface().(*WXRequestInfo); ok {
+			info.ResponseText(w, "不支持的功能")
+		}
+	}
+	return []reflect.Value{}
+}
+
+func (serv *Weixin) resp_error(in []reflect.Value) []reflect.Value {
+	if w, ok := in[0].Interface().(http.ResponseWriter); ok {
+		w.WriteHeader(500)
+	}
+	return []reflect.Value{}
+}
+
+func param_match(fn1 reflect.Value, fn2 reflect.Value) bool {
+	t1, t2 := fn1.Type(), fn2.Type()
+	if (t1.NumIn() != t2.NumIn()) || (t1.NumOut() != t2.NumOut()) {
+		return false
+	}
+	for i := 0; i < t1.NumIn(); i++ {
+		if t1.In(i) != t2.In(i) {
+			return false
+		}
+	}
+	return true
+}
+
+func (serv *Weixin) check_and_set(l_func reflect.Value, uc reflect.Value, name string, resp func([]reflect.Value) []reflect.Value) {
+	f := l_func.Elem()
+	if fn := uc.MethodByName(name); fn.IsValid() && param_match(f, fn) {
+		f.Set(fn)
+		return
+	}
+	v := reflect.MakeFunc(f.Type(), resp)
+	f.Set(v)
+}
+
 func (serv *Weixin) init() bool {
 	if serv.UserCustom == nil {
 		return false
 	}
 	values := reflect.ValueOf(serv.UserCustom)
 
-	if fn := values.MethodByName("OnValidateFail"); fn.IsValid() && fn.Type().NumIn() == 2 {
-		f := reflect.ValueOf(&serv.onValidateFail).Elem()
-		f.Set(fn)
-	} else {
-		serv.onValidateFail = serv.validateFail
-	}
+	serv.check_and_set(reflect.ValueOf(&serv.onValidateFail), values, "OnValidateFail", serv.resp_error)
+	serv.check_and_set(reflect.ValueOf(&serv.unsupported), values, "UnsupportedRequest", serv.resp_unsupport)
+	serv.check_and_set(reflect.ValueOf(&serv.onRequestError), values, "OnRequestError", serv.resp_error)
+	serv.check_and_set(reflect.ValueOf(&serv.onTextRequest), values, "OnTextRequest", serv.resp_unsupport)
+	serv.check_and_set(reflect.ValueOf(&serv.onImageRequest), values, "OnImageRequest", serv.resp_unsupport)
+	serv.check_and_set(reflect.ValueOf(&serv.onVoiceRequest), values, "OnVoiceRequest", serv.resp_unsupport)
+	serv.check_and_set(reflect.ValueOf(&serv.onVideoRequest), values, "OnVideoRequest", serv.resp_unsupport)
+	serv.check_and_set(reflect.ValueOf(&serv.onLocationRequest), values, "OnLocationRequest", serv.resp_unsupport)
+	serv.check_and_set(reflect.ValueOf(&serv.onLinkRequest), values, "OnLinkRequest", serv.resp_unsupport)
+	serv.check_and_set(reflect.ValueOf(&serv.onSubscribeEvent), values, "OnSubscribeEvent", serv.resp_unsupport)
+	serv.check_and_set(reflect.ValueOf(&serv.onQRScanEvent), values, "OnQRScanEvent", serv.resp_unsupport)
+	serv.check_and_set(reflect.ValueOf(&serv.onLocationEvent), values, "OnLocationEvent", serv.resp_unsupport)
+	serv.check_and_set(reflect.ValueOf(&serv.onMenuEvent), values, "OnMenuEvent", serv.resp_unsupport)
+	serv.check_and_set(reflect.ValueOf(&serv.onLinkEvent), values, "OnLinkEvent", serv.resp_unsupport)
 
-	if fn := values.MethodByName("UnsupportedRequest"); fn.IsValid() && fn.Type().NumIn() == 2 {
-		f := reflect.ValueOf(&serv.unsupported).Elem()
-		f.Set(fn)
-	} else {
-		serv.unsupported = serv.unsupportedRequest
-	}
-
-	if fn := values.MethodByName("OnRequestError"); fn.IsValid() && fn.Type().NumIn() == 2 {
-		f := reflect.ValueOf(&serv.onRequestError).Elem()
-		f.Set(fn)
-	} else {
-		serv.onRequestError = serv.requestError
-	}
-
-	if fn := values.MethodByName("OnTextRequest"); fn.IsValid() && fn.Type().NumIn() == 3 {
-		f := reflect.ValueOf(&serv.onTextRequest).Elem()
-		f.Set(fn)
-	} else {
-		serv.onTextRequest = serv.postText
-	}
-
-	if fn := values.MethodByName("OnLocationRequest"); fn.IsValid() && fn.Type().NumIn() == 3 {
-		f := reflect.ValueOf(&serv.onLocationRequest).Elem()
-		f.Set(fn)
-	} else {
-		serv.onLocationRequest = serv.postLocation
-	}
-
-	if fn := values.MethodByName("OnSubscribeEvent"); fn.IsValid() && fn.Type().NumIn() == 3 {
-		f := reflect.ValueOf(&serv.onSubscribeEvent).Elem()
-		f.Set(fn)
-	} else {
-		serv.onSubscribeEvent = func(w http.ResponseWriter, info *WXRequestInfo, sub bool) {
-			w.WriteHeader(200)
-		}
-	}
-
-	if fn := values.MethodByName("OnQRScanEvent"); fn.IsValid() && fn.Type().NumIn() == 4 {
-		f := reflect.ValueOf(&serv.onQRScanEvent).Elem()
-		f.Set(fn)
-	} else {
-		serv.onQRScanEvent = func(w http.ResponseWriter, info *WXRequestInfo, key, ticket string) {
-			info.ResponseText(w, "很抱歉，对您的请求暂时无法响应")
-		}
-
-	}
-
-	if fn := values.MethodByName("OnLocationEvent"); fn.IsValid() && fn.Type().NumIn() == 3 {
-		f := reflect.ValueOf(&serv.onLocationEvent).Elem()
-		f.Set(fn)
-	} else {
-		serv.onLocationEvent = func(w http.ResponseWriter, info *WXRequestInfo, pos *WXLocationEvent) {
-			info.ResponseText(w, "很抱歉，对您的请求暂时无法响应")
-		}
-	}
-
-	if fn := values.MethodByName("OnMenuEvent"); fn.IsValid() && fn.Type().NumIn() == 3 {
-		f := reflect.ValueOf(&serv.onMenuEvent).Elem()
-		f.Set(fn)
-	} else {
-		serv.onMenuEvent = func(w http.ResponseWriter, info *WXRequestInfo, key string) {
-			info.ResponseText(w, "很抱歉，对您的请求暂时无法响应")
-		}
-	}
-
-	if fn := values.MethodByName("OnLinkEvent"); fn.IsValid() && fn.Type().NumIn() == 3 {
-		f := reflect.ValueOf(&serv.onLinkEvent).Elem()
-		f.Set(fn)
-	} else {
-		serv.onLinkEvent = func(w http.ResponseWriter, info *WXRequestInfo, url string) {
-			info.ResponseText(w, "很抱歉，对您的请求暂时无法响应")
-		}
-	}
 	go serv.get_access_token()
 	return true
 }
@@ -146,32 +120,43 @@ func (serv *Weixin) onGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (serv *Weixin) onPost(w http.ResponseWriter, r *http.Request) {
-	go_logger.GetLogger("weixin").Trace("收到一次POST请求")
 	defer r.Body.Close()
 	body, _ := ioutil.ReadAll(r.Body)
 	req := WXRequest{}
-	go_logger.GetLogger("weixin").Trace("内容是:", body)
+	go_logger.GetLogger("weixin").Trace("收到一次POST请求, 内容是:")
+	go_logger.GetLogger("weixin").Trace(string(body))
 	if err := xml.Unmarshal(body, &req); err != nil {
 		go_logger.GetLogger("weixin").Error("解析xml出错:", err.Error())
 		serv.onRequestError(w, r)
 		return
 	}
 	if strings.ToLower(req.MsgType) == "text" {
-		serv.onTextRequest(w, &req.WXRequestInfo, &req.Content)
+		go_logger.GetLogger("weixin").Info("用户发送了一个文本请求")
+		serv.onTextRequest(w, &req.WXRequestInfo, req.Content)
 	} else if strings.ToLower(req.MsgType) == "location" {
+		go_logger.GetLogger("weixin").Info("用户发送了一个位置请求")
 		serv.onLocationRequest(w, &req.WXRequestInfo, &req.WXLocationRequest)
 	} else if strings.ToLower(req.MsgType) == "image" {
-		go_logger.GetLogger("weixin").Trace("用户发上来一张图片: ", req.MediaId)
-		go_logger.GetLogger("weixin").Trace(req.PicUrl)
+		serv.unsupported(w, &req.WXRequestInfo)
+		go_logger.GetLogger("weixin").Info("用户发上来一张图片: ", req.MediaId)
+		serv.onImageRequest(w, &req.WXRequestInfo, req.MediaId, req.PicUrl)
 	} else if strings.ToLower(req.MsgType) == "voice" {
-		go_logger.GetLogger("weixin").Trace("用户发上来一段语音: ", req.MediaId)
-		go_logger.GetLogger("weixin").Trace(req.Format)
+		go_logger.GetLogger("weixin").Info("用户发上来一段语音: ", req.MediaId)
+		serv.onVoiceRequest(w, &req.WXRequestInfo, req.MediaId, req.Format)
+	} else if strings.ToLower(req.MsgType) == "video" {
+		go_logger.GetLogger("weixin").Info("用户发上来一段视频: ", req.MediaId)
+		serv.onVideoRequest(w, &req.WXRequestInfo, req.MediaId, req.ThumbMediaId, false)
+	} else if strings.ToLower(req.MsgType) == "shortvideo" {
+		go_logger.GetLogger("weixin").Info("用户发上来一段小视频: ", req.MediaId)
+		serv.onVideoRequest(w, &req.WXRequestInfo, req.MediaId, req.ThumbMediaId, true)
+	} else if strings.ToLower(req.MsgType) == "event" {
+		go_logger.GetLogger("weixin").Info("用户发上来一个链接 ")
+		serv.onLinkRequest(w, &req.WXRequestInfo, &req.WXLinkRequest)
 	} else if strings.ToLower(req.MsgType) == "event" {
 		serv.onEvent(w, &req.WXRequestInfo, &req.WXEvent)
 	} else {
 		go_logger.GetLogger("weixin").Error("不支持的POST请求:", req.MsgType)
 		serv.unsupported(w, &req.WXRequestInfo)
-		fmt.Println(body)
 	}
 }
 
@@ -182,38 +167,21 @@ func (serv *Weixin) onEvent(w http.ResponseWriter, info *WXRequestInfo, e *WXEve
 			serv.onQRScanEvent(w, info, e.EventKey, e.Ticket)
 		}
 	} else if strings.ToLower(e.Event) == "unsubscribe" {
+		go_logger.GetLogger("weixin").Info("用户取消订阅 ")
 		serv.onSubscribeEvent(w, info, false)
 	} else if strings.ToLower(e.Event) == "scan" {
+		go_logger.GetLogger("weixin").Info("用户触发了扫描二维码事件")
 		serv.onQRScanEvent(w, info, e.EventKey, e.Ticket)
+		go_logger.GetLogger("weixin").Info("用户触发了位置事件")
 	} else if strings.ToLower(e.Event) == "location" {
 		serv.onLocationEvent(w, info, &e.WXLocationEvent)
 	} else if strings.ToLower(e.Event) == "click" {
+		go_logger.GetLogger("weixin").Info("用户触发了点击菜单事件")
 		serv.onMenuEvent(w, info, e.EventKey)
 	} else if strings.ToLower(e.Event) == "view" {
+		go_logger.GetLogger("weixin").Info("用户触发了点击菜单链接事件")
 		serv.onLinkEvent(w, info, e.EventKey)
 	} else {
 		go_logger.GetLogger("weixin").Trace("不支持的Event: ", e.Event)
 	}
-}
-
-func (serv *Weixin) validateFail(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(404)
-}
-
-func (serv *Weixin) unsupportedRequest(w http.ResponseWriter, info *WXRequestInfo) {
-	info.ResponseText(w, "很抱歉，对您的请求暂时无法响应")
-}
-
-func (serv *Weixin) requestError(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(500)
-}
-
-func (serv *Weixin) postText(w http.ResponseWriter, info *WXRequestInfo, content *string) {
-	go_logger.GetLogger("weixin").Trace("用户发送了一个文本:", content)
-	serv.unsupported(w, info)
-}
-
-func (serv *Weixin) postLocation(w http.ResponseWriter, info *WXRequestInfo, pos *WXLocationRequest) {
-	go_logger.GetLogger("weixin").Trace("用户发送了一个坐标:", pos.Location_Y, ",", pos.Location_X)
-	serv.unsupported(w, info)
 }

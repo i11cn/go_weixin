@@ -17,7 +17,11 @@ type Weixin struct {
 	onRequestError OnRequestError
 
 	onTextRequest     OnTextRequest
+	onImageRequest    OnImageRequest
+	onVoiceRequest    OnVoiceRequest
+	onVideoRequest    OnVideoRequest
 	onLocationRequest OnLocationRequest
+	onLinkRequest     OnLinkRequest
 	onSubscribeEvent  OnSubscribeEvent
 	onQRScanEvent     OnQRScanEvent
 	onLocationEvent   OnLocationEvent
