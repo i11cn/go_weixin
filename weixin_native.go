@@ -62,10 +62,10 @@ func (serv *Weixin) check_and_set(l_func reflect.Value, uc reflect.Value, name s
 }
 
 func (serv *Weixin) init() bool {
-	if serv.UserCustom == nil {
+	if serv.user_custom == nil {
 		return false
 	}
-	values := reflect.ValueOf(serv.UserCustom)
+	values := reflect.ValueOf(serv.user_custom)
 
 	serv.check_and_set(reflect.ValueOf(&serv.onValidateFail), values, "OnValidateFail", serv.resp_error)
 	serv.check_and_set(reflect.ValueOf(&serv.unsupported), values, "UnsupportedRequest", serv.resp_unsupport)
@@ -91,6 +91,13 @@ type access_token_json struct {
 	Expire      int    `json:"expires_in"`
 }
 
+type js_token_json struct {
+	ErrCode int    `json:"errcode"`
+	ErrMsg  string `json:"errmsg"`
+	Ticket  string `json:"ticket"`
+	Expire  int    `json:"expires_in"`
+}
+
 func (serv *Weixin) get_access_token() {
 	url := fmt.Sprintf("https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=%s&secret=%s", serv.AppID, serv.AppSecret)
 	if resp, err := http.Get(url); err == nil {
@@ -99,6 +106,8 @@ func (serv *Weixin) get_access_token() {
 		d := access_token_json{}
 		if err = json.Unmarshal(body, &d); err == nil {
 			serv.AccessToken = d.AccessToken
+			go serv.get_jsapi_token(1)
+			go serv.get_wxcard_token(1)
 			time.Sleep(time.Duration(d.Expire-100) * time.Second)
 			go serv.get_access_token()
 			return
@@ -106,6 +115,58 @@ func (serv *Weixin) get_access_token() {
 	}
 	time.Sleep(10 * time.Second)
 	go serv.get_access_token()
+}
+
+func (serv *Weixin) get_jsapi_token(count int) {
+	url := fmt.Sprintf("https://api.weixin.qq.com/cgi-bin/ticket/getticket?access_token=%s&type=jsapi", serv.AccessToken)
+	if resp, err := http.Get(url); err == nil {
+		defer resp.Body.Close()
+		body, _ := ioutil.ReadAll(resp.Body)
+		d := js_token_json{}
+		if err = json.Unmarshal(body, &d); err == nil {
+			serv.JSApiToken = d.Ticket
+			time.Sleep(time.Duration(d.Expire) * time.Second)
+			go func(token string) {
+				if serv.JSApiToken == token {
+					serv.JSApiToken = ""
+				}
+			}(serv.JSApiToken)
+			return
+		}
+	}
+	if count <= 3 {
+		time.Sleep(10 * time.Second)
+		go serv.get_jsapi_token(count + 1)
+	}
+}
+
+func (serv *Weixin) get_wxcard_token(count int) {
+	url := fmt.Sprintf("https://api.weixin.qq.com/cgi-bin/ticket/getticket?access_token=%s&type=wx_card", serv.AccessToken)
+	if resp, err := http.Get(url); err == nil {
+		defer resp.Body.Close()
+		body, _ := ioutil.ReadAll(resp.Body)
+		d := js_token_json{}
+		if err = json.Unmarshal(body, &d); err == nil {
+			serv.WXCardToken = d.Ticket
+			time.Sleep(time.Duration(d.Expire) * time.Second)
+			go func(token string) {
+				if serv.WXCardToken == token {
+					serv.WXCardToken = ""
+				}
+			}(serv.WXCardToken)
+			return
+		}
+	}
+	if count <= 3 {
+		time.Sleep(10 * time.Second)
+		go serv.get_jsapi_token(count + 1)
+	}
+}
+
+func (serv *Weixin) gen_app_info(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/x-javascript")
+	s := fmt.Sprintf("var app_info = {}")
+	w.Write([]byte(s))
 }
 
 func (serv *Weixin) onGet(w http.ResponseWriter, r *http.Request) {
@@ -149,9 +210,12 @@ func (serv *Weixin) onPost(w http.ResponseWriter, r *http.Request) {
 	} else if strings.ToLower(req.MsgType) == "shortvideo" {
 		go_logger.GetLogger("weixin").Info("用户发上来一段小视频: ", req.MediaId)
 		serv.onVideoRequest(w, &req.WXRequestInfo, req.MediaId, req.ThumbMediaId, true)
-	} else if strings.ToLower(req.MsgType) == "event" {
-		go_logger.GetLogger("weixin").Info("用户发上来一个链接 ")
+	} else if strings.ToLower(req.MsgType) == "link" {
+		go_logger.GetLogger("weixin").Info("用户发上来一个链接")
 		serv.onLinkRequest(w, &req.WXRequestInfo, &req.WXLinkRequest)
+	} else if strings.ToLower(req.MsgType) == "event" {
+		go_logger.GetLogger("weixin").Info("用户发上来一个Event")
+		serv.onEvent(w, &req.WXRequestInfo, &req.WXEvent)
 	} else if strings.ToLower(req.MsgType) == "event" {
 		serv.onEvent(w, &req.WXRequestInfo, &req.WXEvent)
 	} else {
@@ -162,12 +226,13 @@ func (serv *Weixin) onPost(w http.ResponseWriter, r *http.Request) {
 
 func (serv *Weixin) onEvent(w http.ResponseWriter, info *WXRequestInfo, e *WXEvent) {
 	if strings.ToLower(e.Event) == "subscribe" {
+		go_logger.GetLogger("weixin").Info("用户订阅了我们的号")
 		serv.onSubscribeEvent(w, info, true)
 		if len(e.EventKey) > 0 {
 			serv.onQRScanEvent(w, info, e.EventKey, e.Ticket)
 		}
 	} else if strings.ToLower(e.Event) == "unsubscribe" {
-		go_logger.GetLogger("weixin").Info("用户取消订阅 ")
+		go_logger.GetLogger("weixin").Info("用户取消订阅")
 		serv.onSubscribeEvent(w, info, false)
 	} else if strings.ToLower(e.Event) == "scan" {
 		go_logger.GetLogger("weixin").Info("用户触发了扫描二维码事件")

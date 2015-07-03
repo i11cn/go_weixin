@@ -7,10 +7,17 @@ import (
 	"strings"
 )
 
+type Tokens struct {
+	AccessToken string
+	JSApiToken  string
+	WXCardToken string
+}
+
 type Weixin struct {
 	WXConfig
-	AccessToken string
-	UserCustom  interface{}
+	Tokens
+
+	user_custom interface{}
 
 	onValidateFail OnValidateFail
 	unsupported    UnsupportedRequest
@@ -30,6 +37,8 @@ type Weixin struct {
 }
 
 func (serv *Weixin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("收到一次", r.Method, "请求 : ")
+	fmt.Println(r.URL.Query())
 	v := r.URL.Query()
 	if len(v) >= 3 && exist_all_values(v, []string{"signature", "timestamp", "nonce"}) {
 		strs := []string{serv.Token, v.Get("timestamp"), v.Get("nonce")}

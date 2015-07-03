@@ -201,7 +201,7 @@ func (info *WXRequestInfo) ResponseMusic(w http.ResponseWriter, id, title, desc,
 }
 
 func NewWeixinServ(conf *WXConfig, uc interface{}) *Weixin {
-	serv := &Weixin{WXConfig: *conf, UserCustom: uc}
+	serv := &Weixin{WXConfig: *conf, user_custom: uc}
 	if serv.init() {
 		return serv
 	} else {
