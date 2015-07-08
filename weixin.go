@@ -2,6 +2,7 @@ package weixin
 
 import (
 	"encoding/xml"
+	"fmt"
 	"github.com/i11cn/go_logger"
 	"net/http"
 	"time"
@@ -103,7 +104,7 @@ type (
 	WXNewsResponse struct {
 		WXResponseInfo
 		ArticleCount int
-		News         WXNewsItem `xml:"Articles>item"`
+		Items        []WXNewsItem `xml:"Articles>item"`
 	}
 
 	WXConfig struct {
@@ -197,6 +198,24 @@ func (info *WXRequestInfo) ResponseMusic(w http.ResponseWriter, id, title, desc,
 	resp.Description = desc
 	resp.MusicUrl = url
 	resp.HQMusicUrl = hqurl
+	info.Response(w, resp)
+}
+
+func (info *WXRequestInfo) ResponseNews(w http.ResponseWriter, articles []WXNewsItem) {
+	resp := WXNewsResponse{}
+	resp.ToUserName = info.FromUserName
+	resp.FromUserName = info.ToUserName
+	resp.CreateTime = time.Now().Unix()
+	resp.MsgType = "news"
+	resp.ArticleCount = len(articles)
+	resp.Items = articles
+
+	output, err := xml.MarshalIndent(resp, "", "")
+	if err != nil {
+		go_logger.GetLogger("weixin").Error("创建响应xml失败:", err.Error())
+	}
+	fmt.Println(string(output))
+
 	info.Response(w, resp)
 }
 
