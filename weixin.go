@@ -2,7 +2,6 @@ package weixin
 
 import (
 	"encoding/xml"
-	"fmt"
 	"github.com/i11cn/go_logger"
 	"net/http"
 	"time"
@@ -209,13 +208,6 @@ func (info *WXRequestInfo) ResponseNews(w http.ResponseWriter, articles []WXNews
 	resp.MsgType = "news"
 	resp.ArticleCount = len(articles)
 	resp.Items = articles
-
-	output, err := xml.MarshalIndent(resp, "", "")
-	if err != nil {
-		go_logger.GetLogger("weixin").Error("创建响应xml失败:", err.Error())
-	}
-	fmt.Println(string(output))
-
 	info.Response(w, resp)
 }
 
