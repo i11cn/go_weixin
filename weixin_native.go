@@ -172,7 +172,7 @@ func (serv *Weixin) gen_app_info(w http.ResponseWriter, r *http.Request) {
 func (serv *Weixin) onGet(w http.ResponseWriter, r *http.Request) {
 	v := r.URL.Query()
 	if _, ok := v["echostr"]; ok {
-		go_logger.GetLogger("weixin").Info("服务器来验证了")
+		logger.GetLogger("weixin").Info("服务器来验证了")
 		w.Write([]byte(v.Get("echostr")))
 	} else {
 		// 这是个什么请求？只有验证，没有echostr
@@ -184,69 +184,69 @@ func (serv *Weixin) onPost(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	body, _ := ioutil.ReadAll(r.Body)
 	req := WXRequest{}
-	go_logger.GetLogger("weixin").Trace("收到一次POST请求, 内容是:")
-	go_logger.GetLogger("weixin").Trace(string(body))
+	logger.GetLogger("weixin").Trace("收到一次POST请求, 内容是:")
+	logger.GetLogger("weixin").Trace(string(body))
 	if err := xml.Unmarshal(body, &req); err != nil {
-		go_logger.GetLogger("weixin").Error("解析xml出错:", err.Error())
+		logger.GetLogger("weixin").Error("解析xml出错:", err.Error())
 		serv.onRequestError(w, r)
 		return
 	}
 	if strings.ToLower(req.MsgType) == "text" {
-		go_logger.GetLogger("weixin").Info("用户发送了一个文本请求")
+		logger.GetLogger("weixin").Info("用户发送了一个文本请求")
 		serv.onTextRequest(w, &req.WXRequestInfo, req.Content)
 	} else if strings.ToLower(req.MsgType) == "location" {
-		go_logger.GetLogger("weixin").Info("用户发送了一个位置请求")
+		logger.GetLogger("weixin").Info("用户发送了一个位置请求")
 		serv.onLocationRequest(w, &req.WXRequestInfo, &req.WXLocationRequest)
 	} else if strings.ToLower(req.MsgType) == "image" {
 		serv.unsupported(w, &req.WXRequestInfo)
-		go_logger.GetLogger("weixin").Info("用户发上来一张图片: ", req.MediaId)
+		logger.GetLogger("weixin").Info("用户发上来一张图片: ", req.MediaId)
 		serv.onImageRequest(w, &req.WXRequestInfo, req.MediaId, req.PicUrl)
 	} else if strings.ToLower(req.MsgType) == "voice" {
-		go_logger.GetLogger("weixin").Info("用户发上来一段语音: ", req.MediaId)
+		logger.GetLogger("weixin").Info("用户发上来一段语音: ", req.MediaId)
 		serv.onVoiceRequest(w, &req.WXRequestInfo, req.MediaId, req.Format)
 	} else if strings.ToLower(req.MsgType) == "video" {
-		go_logger.GetLogger("weixin").Info("用户发上来一段视频: ", req.MediaId)
+		logger.GetLogger("weixin").Info("用户发上来一段视频: ", req.MediaId)
 		serv.onVideoRequest(w, &req.WXRequestInfo, req.MediaId, req.ThumbMediaId, false)
 	} else if strings.ToLower(req.MsgType) == "shortvideo" {
-		go_logger.GetLogger("weixin").Info("用户发上来一段小视频: ", req.MediaId)
+		logger.GetLogger("weixin").Info("用户发上来一段小视频: ", req.MediaId)
 		serv.onVideoRequest(w, &req.WXRequestInfo, req.MediaId, req.ThumbMediaId, true)
 	} else if strings.ToLower(req.MsgType) == "link" {
-		go_logger.GetLogger("weixin").Info("用户发上来一个链接")
+		logger.GetLogger("weixin").Info("用户发上来一个链接")
 		serv.onLinkRequest(w, &req.WXRequestInfo, &req.WXLinkRequest)
 	} else if strings.ToLower(req.MsgType) == "event" {
-		go_logger.GetLogger("weixin").Info("用户发上来一个Event")
+		logger.GetLogger("weixin").Info("用户发上来一个Event")
 		serv.onEvent(w, &req.WXRequestInfo, &req.WXEvent)
 	} else if strings.ToLower(req.MsgType) == "event" {
 		serv.onEvent(w, &req.WXRequestInfo, &req.WXEvent)
 	} else {
-		go_logger.GetLogger("weixin").Error("不支持的POST请求:", req.MsgType)
+		logger.GetLogger("weixin").Error("不支持的POST请求:", req.MsgType)
 		serv.unsupported(w, &req.WXRequestInfo)
 	}
 }
 
 func (serv *Weixin) onEvent(w http.ResponseWriter, info *WXRequestInfo, e *WXEvent) {
 	if strings.ToLower(e.Event) == "subscribe" {
-		go_logger.GetLogger("weixin").Info("用户订阅了我们的号")
+		logger.GetLogger("weixin").Info("用户订阅了我们的号")
 		serv.onSubscribeEvent(w, info, true)
 		if len(e.EventKey) > 0 {
 			serv.onQRScanEvent(w, info, e.EventKey, e.Ticket)
 		}
 	} else if strings.ToLower(e.Event) == "unsubscribe" {
-		go_logger.GetLogger("weixin").Info("用户取消订阅")
+		logger.GetLogger("weixin").Info("用户取消订阅")
 		serv.onSubscribeEvent(w, info, false)
 	} else if strings.ToLower(e.Event) == "scan" {
-		go_logger.GetLogger("weixin").Info("用户触发了扫描二维码事件")
+		logger.GetLogger("weixin").Info("用户触发了扫描二维码事件")
 		serv.onQRScanEvent(w, info, e.EventKey, e.Ticket)
-		go_logger.GetLogger("weixin").Info("用户触发了位置事件")
+		logger.GetLogger("weixin").Info("用户触发了位置事件")
 	} else if strings.ToLower(e.Event) == "location" {
 		serv.onLocationEvent(w, info, &e.WXLocationEvent)
 	} else if strings.ToLower(e.Event) == "click" {
-		go_logger.GetLogger("weixin").Info("用户触发了点击菜单事件")
+		logger.GetLogger("weixin").Info("用户触发了点击菜单事件")
 		serv.onMenuEvent(w, info, e.EventKey)
 	} else if strings.ToLower(e.Event) == "view" {
-		go_logger.GetLogger("weixin").Info("用户触发了点击菜单链接事件")
+		logger.GetLogger("weixin").Info("用户触发了点击菜单链接事件")
 		serv.onLinkEvent(w, info, e.EventKey)
 	} else {
-		go_logger.GetLogger("weixin").Trace("不支持的Event: ", e.Event)
+		logger.GetLogger("weixin").Trace("不支持的Event: ", e.Event)
 	}
 }

@@ -107,10 +107,10 @@ type (
 	}
 
 	WXConfig struct {
-		Token     string
-		MsgKey    string
-		AppID     string
-		AppSecret string
+		Token          string
+		EncodingAESKey string
+		AppID          string
+		AppSecret      string
 	}
 )
 
@@ -136,12 +136,12 @@ type (
 func (info *WXRequestInfo) Response(w http.ResponseWriter, v interface{}) {
 	output, err := xml.MarshalIndent(v, "", "")
 	if err != nil {
-		go_logger.GetLogger("weixin").Error("创建响应xml失败:", err.Error())
+		logger.GetLogger("weixin").Error("创建响应xml失败:", err.Error())
 		w.WriteHeader(500)
 		return
 	}
 	w.Write(output)
-	go_logger.GetLogger("weixin").Trace("给用户返回响应:", string(output))
+	logger.GetLogger("weixin").Trace("给用户返回响应:", string(output))
 }
 
 func (info *WXRequestInfo) ResponseText(w http.ResponseWriter, content string) {
