@@ -98,25 +98,6 @@ type js_token_json struct {
 	Expire  int    `json:"expires_in"`
 }
 
-func (serv *Weixin) get_access_token() {
-	url := fmt.Sprintf("https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=%s&secret=%s", serv.AppID, serv.AppSecret)
-	if resp, err := http.Get(url); err == nil {
-		defer resp.Body.Close()
-		body, _ := ioutil.ReadAll(resp.Body)
-		d := access_token_json{}
-		if err = json.Unmarshal(body, &d); err == nil {
-			serv.AccessToken = d.AccessToken
-			go serv.get_jsapi_token(1)
-			go serv.get_wxcard_token(1)
-			time.Sleep(time.Duration(d.Expire-100) * time.Second)
-			go serv.get_access_token()
-			return
-		}
-	}
-	time.Sleep(10 * time.Second)
-	go serv.get_access_token()
-}
-
 func (serv *Weixin) get_jsapi_token(count int) {
 	url := fmt.Sprintf("https://api.weixin.qq.com/cgi-bin/ticket/getticket?access_token=%s&type=jsapi", serv.AccessToken)
 	if resp, err := http.Get(url); err == nil {

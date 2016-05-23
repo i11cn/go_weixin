@@ -3,6 +3,7 @@ package weixin
 import (
 	"crypto/sha1"
 	"fmt"
+	rest "github.com/i11cn/go_rest_client"
 	"net/http"
 	"strings"
 )
@@ -73,6 +74,10 @@ func (serv *Weixin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.WriteHeader(500)
 	}
+}
+
+func (serv *Weixin) GetRestClient() *rest.RestClient {
+	return nil
 }
 
 func (serv *Weixin) GetAccessToken() string {

@@ -1,6 +1,7 @@
 package weixin
 
 import (
+	"errors"
 	"time"
 )
 
@@ -10,19 +11,29 @@ type (
 		GetToken() string
 	}
 
-	access_token_local struct {
+	token_in_local struct {
 		WXConfig
-		token string
+		token_type int
+		token      string
 	}
 
-	access_token_redis struct {
+	token_in_redis struct {
 		WXConfig
+		token_type int
 	}
 
-	access_token_etcd struct {
+	token_in_etcd struct {
 		WXConfig
-		token string
-		last  time.Time
+		token_type int
+		token      string
+		last       time.Time
+	}
+
+	access_token_response struct {
+		ErrCode int    `json:"errcode"`
+		ErrMsg  string `json:"errmsg"`
+		Token   string `json:"access_token"`
+		Expire  int    `json:"expires_in"`
 	}
 )
 
@@ -38,17 +49,34 @@ const (
 	Etcd
 )
 
-func (wx *Weixin) SetAccessSource(t, s int) {
-	switch t {
-	case AccessToken:
-	case JSApiToken:
-	case WXCardToken:
+func (wx *Weixin) SetTokenSource(t, s int) (ret WXToken) {
+	switch s {
+	case Local:
+		ret = &token_in_local{wx.WXConfig, t, ""}
+	case Redis:
+	case Etcd:
 	}
+	return
 }
 
-func (wx *access_token_local) Expired() {
+func (wx *Weixin) get_access_token() (string, int, error) {
+	rc := wx.GetRestClient()
+	r := &access_token_response{}
+	if _, err := rc.Get("/token?grant_type=client_credential&appid=%s&secret=%s", r, wx.AppID, wx.AppSecret); err != nil {
+		return "", 0, err
+	}
+	if r.ErrCode > 0 {
+		return "", 0, errors.New(r.ErrMsg)
+	}
+	return r.Token, r.Expire, nil
 }
 
-func (wx *access_token_local) GetToken() string {
-	return wx.token
+func (t *token_in_local) start() {
+}
+
+func (t *token_in_local) Expired() {
+}
+
+func (t *token_in_local) GetToken() string {
+	return t.token
 }
