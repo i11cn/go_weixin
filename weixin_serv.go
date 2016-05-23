@@ -7,34 +7,40 @@ import (
 	"strings"
 )
 
-type Tokens struct {
-	AccessToken string
-	JSApiToken  string
-	WXCardToken string
-}
+type (
+	Tokens struct {
+		AccessToken string
+		JSApiToken  string
+		WXCardToken string
+	}
+	Tokens2 struct {
+		AccessToken2 *WXToken
+	}
 
-type Weixin struct {
-	WXConfig
-	Tokens
+	Weixin struct {
+		WXConfig
+		Tokens2
+		Tokens
 
-	user_custom interface{}
+		user_custom interface{}
 
-	onValidateFail OnValidateFail
-	unsupported    UnsupportedRequest
-	onRequestError OnRequestError
+		onValidateFail OnValidateFail
+		unsupported    UnsupportedRequest
+		onRequestError OnRequestError
 
-	onTextRequest     OnTextRequest
-	onImageRequest    OnImageRequest
-	onVoiceRequest    OnVoiceRequest
-	onVideoRequest    OnVideoRequest
-	onLocationRequest OnLocationRequest
-	onLinkRequest     OnLinkRequest
-	onSubscribeEvent  OnSubscribeEvent
-	onQRScanEvent     OnQRScanEvent
-	onLocationEvent   OnLocationEvent
-	onMenuEvent       OnMenuEvent
-	onLinkEvent       OnLinkEvent
-}
+		onTextRequest     OnTextRequest
+		onImageRequest    OnImageRequest
+		onVoiceRequest    OnVoiceRequest
+		onVideoRequest    OnVideoRequest
+		onLocationRequest OnLocationRequest
+		onLinkRequest     OnLinkRequest
+		onSubscribeEvent  OnSubscribeEvent
+		onQRScanEvent     OnQRScanEvent
+		onLocationEvent   OnLocationEvent
+		onMenuEvent       OnMenuEvent
+		onLinkEvent       OnLinkEvent
+	}
+)
 
 func (serv *Weixin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("收到一次", r.Method, "请求 : ")
