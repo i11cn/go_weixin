@@ -21,30 +21,26 @@ type (
 		WXCardToken WXToken
 	}
 
+	token_base struct {
+		WXConfig
+		fn   func(rc *rest.RestClient, app_id, app_secret string, log *logger.Logger) (string, int, error)
+		rc   *rest.RestClient
+		log  *logger.Logger
+		tch  chan string
+		flag chan int
+	}
 	token_in_local struct {
-		WXConfig
-		token_type int
-		fn         func(rc *rest.RestClient, app_id, app_secret string, log *logger.Logger) (string, int, error)
-		token      string
-		rc         *rest.RestClient
-		log        *logger.Logger
-		flag       chan int
+		token_base
+		token string
 	}
-
 	token_in_redis struct {
-		WXConfig
-		token_type int
-		rc         *rest.RestClient
-		log        *logger.Logger
+		token_base
+		key string
 	}
-
 	token_in_etcd struct {
-		WXConfig
-		token_type int
-		token      string
-		last       time.Time
-		rc         *rest.RestClient
-		log        *logger.Logger
+		token_base
+		key   string
+		token string
 	}
 
 	access_token_response struct {
@@ -75,7 +71,7 @@ func (wx *Weixin) SetTokenSource(t, s int) (ret WXToken) {
 	}
 	switch s {
 	case Local:
-		ret = (&token_in_local{wx.cfg, t, get_access_token, "", wx.rc, wx.log, make(chan int)}).start()
+		ret = (&token_in_local{token_base{wx.cfg, get_access_token, wx.rc, wx.log, make(chan string), make(chan int)}, ""}).start()
 	case Redis:
 	case Etcd:
 	default:
@@ -98,55 +94,65 @@ func get_access_token(rc *rest.RestClient, app_id, app_secret string, log *logge
 	return r.Token, r.Expire, nil
 }
 
-func (t *token_in_local) start() *token_in_local {
-	t.log.Trace("启动token的维护工作")
-	fn := func(t *token_in_local) {
-		delay := 0
-		for {
-			select {
-			case i := <-t.flag:
-				if i == 0 {
-					t.log.Log("token维护routing退出")
-					return
-				}
-				t.log.Log("强制更新token")
-				token, exp, err := t.fn(t.rc, t.AppID, t.AppSecret, t.log)
-				if err != nil {
-					t.log.Error(err.Error())
-					t.log.Log("延时10秒钟重新获取Token")
-					delay = 10
-					continue
-				}
-				t.token = token
-				delay = exp*9/10 + rand.Intn(exp/20)
-				t.log.Trace("获取到的Token是:", token, "，过期时长为:", exp)
-				t.log.Trace("延时", delay, "秒执行下一次获取Token的操作")
-			case <-time.After(time.Duration(delay) * time.Second):
-				token, exp, err := t.fn(t.rc, t.AppID, t.AppSecret, t.log)
-				if err != nil {
-					t.log.Log("延时10秒钟重新获取Token")
-					delay = 10
-					continue
-				}
-				t.token = token
-				delay = exp*9/10 + rand.Intn(exp/20)
-				t.log.Trace("获取到的Token是:", token, "，过期时长为:", exp)
-				t.log.Trace("延时", delay, "秒执行下一次获取Token的操作")
+func (t *token_base) fetch_routine() {
+	delay := 0
+	for {
+		select {
+		case i := <-t.flag:
+			if i == 0 {
+				t.log.Log("从微信服务器获取token的routing退出")
+				return
 			}
+			t.log.Log("强制更新token")
+			token, exp, err := t.fn(t.rc, t.AppID, t.AppSecret, t.log)
+			if err != nil {
+				t.log.Error(err.Error())
+				t.log.Log("延时10秒钟重新获取Token")
+				delay = 10
+				continue
+			}
+			delay = exp*9/10 + rand.Intn(exp/20)
+			t.log.Trace("获取到的Token是:", token, "，过期时长为:", exp)
+			t.log.Trace("延时", delay, "秒执行下一次获取Token的操作")
+			t.tch <- token
+		case <-time.After(time.Duration(delay) * time.Second):
+			token, exp, err := t.fn(t.rc, t.AppID, t.AppSecret, t.log)
+			if err != nil {
+				t.log.Log("延时10秒钟重新获取Token")
+				delay = 10
+				continue
+			}
+			delay = exp*9/10 + rand.Intn(exp/20)
+			t.log.Trace("获取到的Token是:", token, "，过期时长为:", exp)
+			t.log.Trace("延时", delay, "秒执行下一次获取Token的操作")
+			t.tch <- token
 		}
 	}
-	go fn(t)
+}
+
+func (t *token_in_local) start() *token_in_local {
+	t.log.Trace("启动token的维护工作")
+	go t.fetch_routine()
+	go func(t *token_in_local) {
+		for {
+			tk, ok := <-t.tch
+			if !ok {
+				return
+			}
+			t.token = tk
+		}
+	}(t)
 	return t
 }
 
-func (t *token_in_local) Expired() {
+func (t *token_base) Expired() {
 	t.flag <- 1
+}
+
+func (t *token_base) Close() {
+	t.flag <- 0
 }
 
 func (t *token_in_local) GetToken() string {
 	return t.token
-}
-
-func (t *token_in_local) Close() {
-	t.flag <- 0
 }
