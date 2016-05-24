@@ -16,6 +16,8 @@ type (
 	}
 	Tokens2 struct {
 		AccessToken2 *WXToken
+		JSApiToken2  *WXToken
+		WXCardToken2 *WXToken
 	}
 
 	Weixin struct {

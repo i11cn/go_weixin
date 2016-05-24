@@ -112,6 +112,19 @@ type (
 		AppID          string
 		AppSecret      string
 	}
+
+	WXMessage struct {
+	}
+
+	WXService struct {
+	}
+
+	WeiXin2 struct {
+		cfg     WXConfig
+		tokens  Tokens2
+		service *WXService
+		msg     *WXMessage
+	}
 )
 
 type (
