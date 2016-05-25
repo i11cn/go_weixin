@@ -4,6 +4,7 @@ import (
 	"github.com/i11cn/go_logger"
 	rest "github.com/i11cn/go_rest_client"
 	"math/rand"
+	"net/http"
 	"time"
 )
 
@@ -18,13 +19,10 @@ type (
 	WXMessage struct {
 	}
 
-	WXService struct {
-	}
-
 	Weixin struct {
 		cfg     WXConfig
 		tokens  Tokens
-		service *WXService
+		handler *WXHandler
 		msg     *WXMessage
 		rc      *rest.RestClient
 		log     *logger.Logger
@@ -44,7 +42,7 @@ func init() {
 func NewWeixin(cfg WXConfig) *Weixin {
 	ret := &Weixin{cfg: cfg, tokens: Tokens{}, rc: rest.NewClient("api.weixin.qq.com", 0, "/cgi-bin"), log: g_log}
 	ret.rc.SSL = true
-	ret.tokens.AccessToken = ret.SetTokenSource(AccessToken, Local)
+	ret.tokens.AccessToken = ret.SetTokenSource(AccessToken, Local, true)
 	return ret
 }
 
@@ -59,15 +57,47 @@ func (wx *Weixin) GetAccessToken() string {
 	}
 	return ""
 }
+
 func (wx *Weixin) GetJSApiToken() string {
 	if wx.tokens.JSApiToken != nil {
 		return wx.tokens.JSApiToken.GetToken()
 	}
 	return ""
 }
+
 func (wx *Weixin) GetWXCardToken() string {
 	if wx.tokens.WXCardToken != nil {
 		return wx.tokens.WXCardToken.GetToken()
 	}
 	return ""
+}
+
+func (wx *Weixin) GetHandler() (ret *WXHandler, err error) {
+	if wx.handler == nil {
+		ret, err = NewHandler(wx.cfg, wx.tokens.AccessToken, wx.log)
+		if err != nil {
+			wx.log.Error(err.Error())
+		}
+		wx.handler = ret
+	}
+	ret = wx.handler
+	return
+}
+
+func (wx *Weixin) Start() error {
+	h, err := wx.GetHandler()
+	if err != nil {
+		return err
+	}
+	server := &http.Server{Handler: h}
+	return server.ListenAndServe()
+}
+
+func (wx *Weixin) StartTLS(cert, key string) error {
+	h, err := wx.GetHandler()
+	if err != nil {
+		return err
+	}
+	server := &http.Server{Handler: h}
+	return server.ListenAndServeTLS(cert, key)
 }
