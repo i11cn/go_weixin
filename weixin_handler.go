@@ -1,6 +1,7 @@
 package weixin
 
 import (
+	"encoding/xml"
 	"errors"
 	"github.com/i11cn/go_logger"
 	"io/ioutil"
@@ -13,6 +14,13 @@ type (
 		cfg   WXConfig
 		token WXToken
 		log   *logger.Logger
+	}
+
+	Common struct {
+		ToUserName   string
+		FromUserName string
+		CreateTime   int64
+		MsgType      string
 	}
 )
 
@@ -62,4 +70,11 @@ func (wh *WXHandler) doPost(w http.ResponseWriter, r *http.Request) {
 		wh.log.Error(err.Error())
 	}
 	wh.log.Trace(string(body))
+	req := Common{}
+	if err = xml.Unmarshal(body, &req); err != nil {
+		wh.log.Error("解析xml出错:", err.Error())
+		w.WriteHeader(500)
+		return
+	}
+	wh.log.Trace(req)
 }
