@@ -3,6 +3,7 @@ package weixin
 import (
 	"errors"
 	"github.com/i11cn/go_logger"
+	"io/ioutil"
 	"net/http"
 	"strings"
 )
@@ -51,4 +52,9 @@ func (wh *WXHandler) doGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (wh *WXHandler) doPost(w http.ResponseWriter, r *http.Request) {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		wh.log.Error(err.Error())
+	}
+	wh.log.Trace(string(body))
 }
