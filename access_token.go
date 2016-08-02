@@ -11,8 +11,6 @@ import (
 type (
 	WXTokenMgr interface {
 		GetAccessToken() WXToken
-		GetJSApiToken() WXToken
-		GetWXCardToken() WXToken
 		SetConfig(WXConfig)
 		SetLogger(*logger.Logger)
 	}
@@ -38,8 +36,6 @@ type (
 		rc          *rest.RestClient
 		log         *logger.Logger
 		AccessToken WXToken
-		JSApiToken  WXToken
-		WXCardToken WXToken
 	}
 )
 
@@ -47,24 +43,12 @@ func (this *default_token_mgr) GetAccessToken() WXToken {
 	return this.AccessToken
 }
 
-func (this *default_token_mgr) GetJSApiToken() WXToken {
-	return this.JSApiToken
-}
-
-func (this *default_token_mgr) GetWXCardToken() WXToken {
-	return this.WXCardToken
-}
-
 func (this *default_token_mgr) SetConfig(cfg WXConfig) {
 	this.AccessToken.SetConfig(cfg)
-	this.JSApiToken.SetConfig(cfg)
-	this.WXCardToken.SetConfig(cfg)
 }
 
 func (this *default_token_mgr) SetLogger(log *logger.Logger) {
 	this.AccessToken.SetLogger(log)
-	this.JSApiToken.SetLogger(log)
-	this.WXCardToken.SetLogger(log)
 }
 
 type (
