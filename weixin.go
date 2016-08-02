@@ -20,8 +20,8 @@ type (
 	}
 
 	Weixin struct {
+		WXTokenMgr
 		cfg     WXConfig
-		tokens  Tokens
 		handler *WXHandler
 		msg     *WXMessage
 		rc      *rest.RestClient
@@ -40,9 +40,9 @@ func init() {
 }
 
 func NewWeixin(cfg WXConfig) *Weixin {
-	ret := &Weixin{cfg: cfg, tokens: Tokens{}, rc: rest.NewClient("api.weixin.qq.com", 0, "/cgi-bin"), log: g_log}
+	ret := &Weixin{cfg: cfg, rc: rest.NewClient("api.weixin.qq.com", 0, "/cgi-bin"), log: g_log}
 	ret.rc.SSL = true
-	ret.tokens.AccessToken = ret.SetTokenSource(AccessToken, Local, true)
+	ret.WXTokenMgr = &default_token_mgr{rc: ret.rc, log: ret.log}
 	return ret
 }
 
@@ -51,30 +51,9 @@ func (wx *Weixin) SetLogger(log *logger.Logger) *Weixin {
 	return wx
 }
 
-func (wx *Weixin) GetAccessToken() string {
-	if wx.tokens.AccessToken != nil {
-		return wx.tokens.AccessToken.GetToken()
-	}
-	return ""
-}
-
-func (wx *Weixin) GetJSApiToken() string {
-	if wx.tokens.JSApiToken != nil {
-		return wx.tokens.JSApiToken.GetToken()
-	}
-	return ""
-}
-
-func (wx *Weixin) GetWXCardToken() string {
-	if wx.tokens.WXCardToken != nil {
-		return wx.tokens.WXCardToken.GetToken()
-	}
-	return ""
-}
-
 func (wx *Weixin) GetHandler() (ret *WXHandler, err error) {
 	if wx.handler == nil {
-		ret, err = NewHandler(wx.cfg, wx.tokens.AccessToken, wx.log)
+		ret, err = NewHandler(wx.cfg, wx.GetAccessToken(), wx.log)
 		if err != nil {
 			wx.log.Error(err.Error())
 		}
