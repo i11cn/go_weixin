@@ -16,16 +16,20 @@ type (
 		AppSecret      string
 	}
 
+	WXGlobalInfo struct {
+		Config     WXConfig
+		Log        *logger.Logger
+		RestClient *rest.RestClient
+	}
+
 	WXMessage struct {
 	}
 
 	Weixin struct {
+		WXGlobalInfo
 		WXTokenMgr
-		cfg     WXConfig
 		handler *WXHandler
 		msg     *WXMessage
-		rc      *rest.RestClient
-		log     *logger.Logger
 	}
 )
 
@@ -40,22 +44,22 @@ func init() {
 }
 
 func NewWeixin(cfg WXConfig) *Weixin {
-	ret := &Weixin{cfg: cfg, rc: rest.NewClient("api.weixin.qq.com", 0, "/cgi-bin"), log: g_log}
-	ret.rc.SSL = true
-	ret.WXTokenMgr = &default_token_mgr{rc: ret.rc, log: ret.log}
+	ret := &Weixin{WXGlobalInfo: WXGlobalInfo{cfg, g_log, rest.NewClient("api.weixin.qq.com", 0, "/cgi-bin")}}
+	ret.WXGlobalInfo.RestClient.SSL = true
+	ret.WXTokenMgr = DefaultTokenMgr(&ret.WXGlobalInfo)
 	return ret
 }
 
 func (wx *Weixin) SetLogger(log *logger.Logger) *Weixin {
-	wx.log = log
+	wx.Log = log
 	return wx
 }
 
 func (wx *Weixin) GetHandler() (ret *WXHandler, err error) {
 	if wx.handler == nil {
-		ret, err = NewHandler(wx.cfg, wx.GetAccessToken(), wx.log)
+		ret, err = NewHandler(wx.Config, wx.GetAccessToken(), wx.Log)
 		if err != nil {
-			wx.log.Error(err.Error())
+			wx.Log.Error(err.Error())
 		}
 		wx.handler = ret
 	}

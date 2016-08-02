@@ -11,81 +11,87 @@ import (
 type (
 	WXTokenMgr interface {
 		GetAccessToken() WXToken
-		SetConfig(WXConfig)
-		SetLogger(*logger.Logger)
-	}
-
-	WXToken interface {
-		Expired()
-		GetToken() string
-		Close()
-		SetSource()
-		SetConfig(WXConfig)
-		SetLogger(*logger.Logger)
+		SetGlobalInfo(*WXGlobalInfo)
 	}
 
 	TokenStorage interface {
 		SetToken(string)
 		GetToken() string
 		Start()
+		Stop()
+	}
+
+	WXToken interface {
+		Expired()
+		GetToken() string
+		Close()
+		Primary(bool)
+		SetSource(TokenStorage)
+		SetGlobalInfo(*WXGlobalInfo)
 	}
 )
 
 type (
 	default_token_mgr struct {
-		rc          *rest.RestClient
-		log         *logger.Logger
 		AccessToken WXToken
 	}
 )
+
+func new_token(fn func(rc *rest.RestClient, app_id, app_secret string, log *logger.Logger) (string, int, error), main bool) WXToken {
+	ret := &token_base{main: main}
+	ret.fn = fn
+	ret.SetSource(&token_in_local{})
+	ret.Primary(main)
+	return ret
+}
+
+func DefaultTokenMgr(info *WXGlobalInfo) WXTokenMgr {
+	ret := &default_token_mgr{new_token(get_access_token, true)}
+	return ret
+}
 
 func (this *default_token_mgr) GetAccessToken() WXToken {
 	return this.AccessToken
 }
 
-func (this *default_token_mgr) SetConfig(cfg WXConfig) {
-	this.AccessToken.SetConfig(cfg)
-}
-
-func (this *default_token_mgr) SetLogger(log *logger.Logger) {
-	this.AccessToken.SetLogger(log)
+func (this *default_token_mgr) SetGlobalInfo(info *WXGlobalInfo) {
+	this.AccessToken.SetGlobalInfo(info)
 }
 
 type (
 	token_base struct {
-		app_id     string
-		app_secret string
-		fn         func(rc *rest.RestClient, app_id, app_secret string, log *logger.Logger) (string, int, error)
-		rc         *rest.RestClient
-		log        *logger.Logger
-		store      TokenStorage
-		flag       chan int
+		info  *WXGlobalInfo
+		fn    func(rc *rest.RestClient, app_id, app_secret string, log *logger.Logger) (string, int, error)
+		store TokenStorage
+		main  bool
+		flag  chan int
 	}
 )
 
 func (t *token_base) fetch_routine() {
 	delay := 0
+	info := t.info
 	fn := func() {
-		token, exp, err := t.fn(t.rc, t.app_id, t.app_secret, t.log)
+		token, exp, err := t.fn(info.RestClient, info.Config.AppID, info.Config.AppSecret, info.Log)
 		if err != nil {
-			t.log.Error(err.Error())
+			info.Log.Error(err.Error())
 			delay = 10
-			t.log.Log("延时", delay, "秒钟重新获取Token")
+			info.Log.Log("延时", delay, "秒钟重新获取Token")
 			return
 		}
 		delay = exp*9/10 + rand.Intn(exp/20)
-		t.log.Trace("获取到的Token是:", token, "，过期时长为:", exp)
-		t.log.Trace("延时", delay, "秒执行下一次获取Token的操作")
+		info.Log.Trace("获取到的Token是:", token, "，过期时长为:", exp)
+		info.Log.Trace("延时", delay, "秒执行下一次获取Token的操作")
 		t.store.SetToken(token)
 	}
 	for {
 		select {
 		case i := <-t.flag:
 			if i == 0 {
-				t.log.Log("从微信服务器获取token的routing退出")
+				info.Log.Log("从微信服务器获取token的routing退出")
 				return
 			}
-			t.log.Log("强制更新token")
+			info.Log.Log("强制更新token")
 			fn()
 		case <-time.After(time.Duration(delay) * time.Second):
 			fn()
@@ -101,20 +107,30 @@ func (t *token_base) Close() {
 	t.flag <- 0
 }
 
+func (t *token_base) Primary(main bool) {
+	if t.main == main {
+		return
+	}
+	if t.main {
+		t.Close()
+	} else {
+		go t.fetch_routine()
+	}
+	t.main = main
+}
+
 func (t *token_base) GetToken() string {
 	return t.store.GetToken()
 }
 
-func (t *token_base) SetConfig(cfg WXConfig) {
-	t.app_id = cfg.AppID
-	t.app_secret = cfg.AppSecret
-}
-
-func (t *token_base) SetLogger(log *logger.Logger) {
-	t.log = log
+func (t *token_base) SetGlobalInfo(info *WXGlobalInfo) {
+	t.info = info
 }
 
 func (t *token_base) SetSource(ts TokenStorage) {
+	if t.store != nil {
+		t.store.Stop()
+	}
 	t.store = ts
 	t.store.Start()
 }
@@ -162,6 +178,9 @@ type (
 func (t *token_in_local) Start() {
 }
 
+func (t *token_in_local) Stop() {
+}
+
 func (t *token_in_local) SetToken(token string) {
 	t.token = token
 }
@@ -173,6 +192,9 @@ func (t *token_in_local) GetToken() string {
 func (t *token_in_redis) Start() {
 }
 
+func (t *token_in_redis) Stop() {
+}
+
 func (t *token_in_redis) SetToken(token string) {
 	t.token = token
 }
@@ -181,10 +203,13 @@ func (t *token_in_redis) GetToken() string {
 	return t.token
 }
 
-func (t *token_in_etcd) start() {
+func (t *token_in_etcd) Start() {
 	go func() {
 		// 此处监视etcd中key的变化，如有变化，去保存到t.token
 	}()
+}
+
+func (t *token_in_etcd) Stop() {
 }
 
 func (t *token_in_etcd) SetToken(token string) {
