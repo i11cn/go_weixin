@@ -19,7 +19,7 @@ func exist_all_values(values url.Values, keys ...string) error {
 }
 
 func check_sign(token, sign, ts, nonce string, log *logger.Logger) bool {
-	log.Trace("准备教研签名: ", "signature=", sign, " token=", token, " timestamp=", ts, " nonce=", nonce)
+	log.Trace("准备校验签名: ", "signature=", sign, " token=", token, " timestamp=", ts, " nonce=", nonce)
 	strs := []string{token, ts, nonce}
 	if strs[0] > strs[2] {
 		strs[0], strs[2] = strs[2], strs[0]

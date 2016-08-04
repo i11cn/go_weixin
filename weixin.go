@@ -18,8 +18,13 @@ type (
 
 	WXGlobalInfo struct {
 		Config     WXConfig
-		Log        *logger.Logger
+		Logger     *logger.Logger
 		RestClient *rest.RestClient
+	}
+
+	WXComponent struct {
+		*WXGlobalInfo
+		*Weixin
 	}
 
 	WXMessage struct {
@@ -43,6 +48,14 @@ func init() {
 	//g_log.AddAppender(logger.NewSplittedFileAppender("%T [%N] %L (%f) : %M", "weixin.log", 24*time.Hour))
 }
 
+func (wc WXComponent) SetGlobalInfo(info *WXGlobalInfo) {
+	wc.WXGlobalInfo = info
+}
+
+func (wc WXComponent) GetToken() string {
+	return wc.GetAccessToken().GetToken()
+}
+
 func NewWeixin(cfg WXConfig) *Weixin {
 	ret := &Weixin{WXGlobalInfo: WXGlobalInfo{cfg, g_log, rest.NewClient("api.weixin.qq.com", 0, "/cgi-bin")}}
 	ret.WXGlobalInfo.RestClient.SSL = true
@@ -51,15 +64,15 @@ func NewWeixin(cfg WXConfig) *Weixin {
 }
 
 func (wx *Weixin) SetLogger(log *logger.Logger) *Weixin {
-	wx.Log = log
+	wx.Logger = log
 	return wx
 }
 
 func (wx *Weixin) GetHandler() (ret *WXHandler, err error) {
 	if wx.handler == nil {
-		ret, err = NewHandler(wx.Config, wx.GetAccessToken(), wx.Log)
+		ret, err = NewHandler(&wx.WXGlobalInfo, wx)
 		if err != nil {
-			wx.Log.Error(err.Error())
+			wx.Logger.Error(err.Error())
 		}
 		wx.handler = ret
 	}
@@ -82,5 +95,23 @@ func (wx *Weixin) StartTLS(cert, key string) error {
 		return err
 	}
 	server := &http.Server{Handler: h}
+	return server.ListenAndServeTLS(cert, key)
+}
+
+func (wx *Weixin) StartAt(addr string) error {
+	h, err := wx.GetHandler()
+	if err != nil {
+		return err
+	}
+	server := &http.Server{Addr: addr, Handler: h}
+	return server.ListenAndServe()
+}
+
+func (wx *Weixin) StartTLSAt(addr string, cert, key string) error {
+	h, err := wx.GetHandler()
+	if err != nil {
+		return err
+	}
+	server := &http.Server{Addr: addr, Handler: h}
 	return server.ListenAndServeTLS(cert, key)
 }
