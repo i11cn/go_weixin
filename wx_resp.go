@@ -1,10 +1,16 @@
 package weixin
 
+import (
+	"encoding/xml"
+	"time"
+)
+
 type (
 	Response struct {
+		XMLName      xml.Name `xml:"xml"`
 		ToUserName   string
 		FromUserName string
-		CreateTime   int
+		CreateTime   int64
 		MsgType      string
 	}
 	TextResp struct {
@@ -45,3 +51,34 @@ type (
 		Articles     []Article `xml:"Articles>item,omitempty"`
 	}
 )
+
+func new_response(user, msg_type string) Response {
+	return Response{ToUserName: user, FromUserName: "", CreateTime: time.Now().Unix(), MsgType: msg_type}
+}
+
+func NewTextResponse(user, msg string) *TextResp {
+	return &TextResp{new_response(user, "text"), msg}
+}
+
+func NewImageResponse(user, img_id string) *ImageResp {
+	return &ImageResp{new_response(user, "image"), img_id}
+}
+
+func NewVoiceResponse(user, voice_id string) *VoiceResp {
+	return &VoiceResp{new_response(user, "voice"), voice_id}
+}
+
+func NewVideoResponse(user, video_id, title, desc string) *VideoResp {
+	return &VideoResp{new_response(user, "video"), video_id, title, desc}
+}
+
+func NewMusicResponse(user, music_url, hq_url string) *MusicResp {
+	return &MusicResp{Response: new_response(user, "music"), MusicUrl: music_url, HQMusicUrl: hq_url}
+}
+
+func NewArticleResp(user string, arts ...Article) *ArticleResp {
+	if len(arts) < 1 {
+		return nil
+	}
+	return &ArticleResp{new_response(user, "news"), len(arts), arts}
+}

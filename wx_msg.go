@@ -1,10 +1,14 @@
 package weixin
 
+import (
+	"time"
+)
+
 type (
 	MsgRequest struct {
 		ToUserName   string
 		FromUserName string
-		CreateTime   int
+		CreateTime   int64
 		MsgType      string
 		MsgId        int64
 	}
@@ -47,3 +51,15 @@ type (
 		Url         string
 	}
 )
+
+func (r *MsgRequest) UserName() string {
+	return r.FromUserName
+}
+
+func (r *MsgRequest) GetCreateTime() time.Time {
+	return time.Unix(r.CreateTime, 0)
+}
+
+func (r *MsgRequest) ID() int64 {
+	return r.MsgId
+}

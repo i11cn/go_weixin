@@ -68,50 +68,29 @@ func (wx *Weixin) SetLogger(log *logger.Logger) *Weixin {
 	return wx
 }
 
-func (wx *Weixin) GetHandler() (ret *WXHandler, err error) {
+func (wx *Weixin) GetHandler() *WXHandler {
 	if wx.handler == nil {
-		ret, err = NewHandler(&wx.WXGlobalInfo, wx)
-		if err != nil {
-			wx.Logger.Error(err.Error())
-		}
-		wx.handler = ret
+		wx.handler = NewHandler(&wx.WXGlobalInfo, wx)
 	}
-	ret = wx.handler
-	return
+	return wx.handler
 }
 
 func (wx *Weixin) Start() error {
-	h, err := wx.GetHandler()
-	if err != nil {
-		return err
-	}
-	server := &http.Server{Handler: h}
+	server := &http.Server{Handler: wx.GetHandler()}
 	return server.ListenAndServe()
 }
 
 func (wx *Weixin) StartTLS(cert, key string) error {
-	h, err := wx.GetHandler()
-	if err != nil {
-		return err
-	}
-	server := &http.Server{Handler: h}
+	server := &http.Server{Handler: wx.GetHandler()}
 	return server.ListenAndServeTLS(cert, key)
 }
 
 func (wx *Weixin) StartAt(addr string) error {
-	h, err := wx.GetHandler()
-	if err != nil {
-		return err
-	}
-	server := &http.Server{Addr: addr, Handler: h}
+	server := &http.Server{Addr: addr, Handler: wx.GetHandler()}
 	return server.ListenAndServe()
 }
 
 func (wx *Weixin) StartTLSAt(addr string, cert, key string) error {
-	h, err := wx.GetHandler()
-	if err != nil {
-		return err
-	}
-	server := &http.Server{Addr: addr, Handler: h}
+	server := &http.Server{Addr: addr, Handler: wx.GetHandler()}
 	return server.ListenAndServeTLS(cert, key)
 }

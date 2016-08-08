@@ -4,7 +4,7 @@ type (
 	EventRequest struct {
 		ToUserName   string
 		FromUserName string
-		CreateTime   int
+		CreateTime   int64
 		MsgType      string
 		Event        string
 	}

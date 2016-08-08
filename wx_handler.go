@@ -1,27 +1,40 @@
 package weixin
 
 import (
-	"encoding/xml"
-	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type (
+	VerifyHandle        func(token, sign, timestamp, nonce string) bool
+	TextReqHandle       func(user string, t time.Time, id int64, msg string) (interface{}, error)
+	ImageReqHandle      func(user string, t time.Time, id int64, url, mid string) (interface{}, error)
+	VoiceReqHandle      func(user string, t time.Time, id int64, mid, format, recog string) (interface{}, error)
+	VideoReqHandle      func(user string, t time.Time, id int64, mid, thumbid string) (interface{}, error)
+	ShortVideoReqHandle func(user string, t time.Time, id int64, mid, thumbid string) (interface{}, error)
+	LocationReqHandle   func(user string, t time.Time, id int64, x, y float64, scale int, label string) (interface{}, error)
+	LinkReqHandle       func(user string, t time.Time, id int64, url, title, desc string) (interface{}, error)
+
+	SubscribeHandle   func(user string, t time.Time, key, ticket string) (interface{}, error)
+	UnsubscribeHandle func(user string, t time.Time) (interface{}, error)
+	ScanHandle        func(user string, t time.Time, key, ticker string) (interface{}, error)
+	LocationHandle    func(user string, t time.Time, lat, long, precision float64) (interface{}, error)
+	MenuClickHandle   func(user string, t time.Time, key string) (interface{}, error)
+	MenuViewHandle    func(user string, t time.Time, url string) (interface{}, error)
+
 	WXHandler struct {
 		WXComponent
-	}
-
-	Common struct {
-		ToUserName   string
-		FromUserName string
-		CreateTime   int64
-		MsgType      string
+		verify_handle VerifyHandle
 	}
 )
 
-func NewHandler(info *WXGlobalInfo, wx *Weixin) (*WXHandler, error) {
-	return &WXHandler{WXComponent{info, wx}}, nil
+func NewHandler(info *WXGlobalInfo, wx *Weixin) *WXHandler {
+	ret := &WXHandler{WXComponent: WXComponent{info, wx}}
+	ret.verify_handle = func(token, sign, ts, nonce string) bool {
+		return check_sign(token, sign, ts, nonce, ret.Logger)
+	}
+	return ret
 }
 
 func (wh *WXHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -47,26 +60,6 @@ func (wh *WXHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (wh *WXHandler) doGet(w http.ResponseWriter, r *http.Request) {
-	if _, ok := r.URL.Query()["echostr"]; ok {
-		w.Write([]byte(r.URL.Query().Get("echostr")))
-	} else {
-		wh.Logger.Error("错误的请求，没有echostr")
-		w.WriteHeader(500)
-	}
-}
-
-func (wh *WXHandler) doPost(w http.ResponseWriter, r *http.Request) {
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		wh.Logger.Error(err.Error())
-	}
-	wh.Logger.Trace(string(body))
-	req := Common{}
-	if err = xml.Unmarshal(body, &req); err != nil {
-		wh.Logger.Error("解析xml出错:", err.Error())
-		w.WriteHeader(500)
-		return
-	}
-	wh.Logger.Trace(req)
+func (wh *WXHandler) Handle(fn interface{}) error {
+	return wh.handle(fn)
 }
