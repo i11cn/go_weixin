@@ -52,8 +52,12 @@ type (
 	}
 )
 
+var (
+	g_mp_id string = ""
+)
+
 func new_response(user, msg_type string) Response {
-	return Response{ToUserName: user, FromUserName: "", CreateTime: time.Now().Unix(), MsgType: msg_type}
+	return Response{ToUserName: user, FromUserName: g_mp_id, CreateTime: time.Now().Unix(), MsgType: msg_type}
 }
 
 func NewTextResponse(user, msg string) *TextResp {

@@ -45,6 +45,7 @@ var (
 func init() {
 	rand.Seed(time.Now().UnixNano())
 	g_log.AddAppender(logger.NewConsoleAppender("%T [%N] %L (%f) : %M"))
+	g_log.SetLevel(logger.INFO)
 	//g_log.AddAppender(logger.NewSplittedFileAppender("%T [%N] %L (%f) : %M", "weixin.log", 24*time.Hour))
 }
 

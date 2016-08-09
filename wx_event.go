@@ -1,5 +1,9 @@
 package weixin
 
+import (
+	"time"
+)
+
 type (
 	EventRequest struct {
 		ToUserName   string
@@ -10,8 +14,8 @@ type (
 	}
 	Subscribe struct {
 		EventRequest
-		EventKey *string
-		Ticket   *string
+		EventKey string
+		Ticket   string
 	}
 	Unsubscribe struct {
 		EventRequest
@@ -36,3 +40,11 @@ type (
 		Url string `xml:"EventKey"`
 	}
 )
+
+func (r *EventRequest) UserName() string {
+	return r.FromUserName
+}
+
+func (r *EventRequest) GetCreateTime() time.Time {
+	return time.Unix(r.CreateTime, 0)
+}

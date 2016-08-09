@@ -1,8 +1,6 @@
 package weixin
 
 import (
-	"net/http"
-	"strings"
 	"time"
 )
 
@@ -18,14 +16,29 @@ type (
 
 	SubscribeHandle   func(user string, t time.Time, key, ticket string) (interface{}, error)
 	UnsubscribeHandle func(user string, t time.Time) (interface{}, error)
-	ScanHandle        func(user string, t time.Time, key, ticker string) (interface{}, error)
+	ScanHandle        func(user string, t time.Time, key uint32, ticker string) (interface{}, error)
 	LocationHandle    func(user string, t time.Time, lat, long, precision float64) (interface{}, error)
 	MenuClickHandle   func(user string, t time.Time, key string) (interface{}, error)
 	MenuViewHandle    func(user string, t time.Time, url string) (interface{}, error)
 
 	WXHandler struct {
 		WXComponent
-		verify_handle VerifyHandle
+
+		verify_handle          VerifyHandle
+		text_req_handle        TextReqHandle
+		image_req_handle       ImageReqHandle
+		voice_req_handle       VoiceReqHandle
+		video_req_handle       VideoReqHandle
+		short_video_req_handle ShortVideoReqHandle
+		location_req_handle    LocationReqHandle
+		link_req_handle        LinkReqHandle
+
+		subscribe_handle   SubscribeHandle
+		unsubscribe_handle UnsubscribeHandle
+		scan_handle        ScanHandle
+		location_handle    LocationHandle
+		menu_click_handle  MenuClickHandle
+		menu_view_handle   MenuViewHandle
 	}
 )
 
@@ -35,29 +48,6 @@ func NewHandler(info *WXGlobalInfo, wx *Weixin) *WXHandler {
 		return check_sign(token, sign, ts, nonce, ret.Logger)
 	}
 	return ret
-}
-
-func (wh *WXHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	wh.Logger.Trace("收到一次", r.Method, "请求 : ", r.URL)
-	v := r.URL.Query()
-	if err := exist_all_values(v, "signature", "timestamp", "nonce"); err != nil {
-		wh.Logger.Error("没有校验的签名，请求不是来自微信")
-		w.WriteHeader(500)
-		return
-	}
-	if !check_sign(wh.Config.Token, v.Get("signature"), v.Get("timestamp"), v.Get("nonce"), wh.Logger) {
-		wh.Logger.Error("签名验证失败")
-		w.WriteHeader(301)
-		return
-	}
-	switch strings.ToUpper(r.Method) {
-	case "GET":
-		wh.doGet(w, r)
-	case "POST":
-		wh.doPost(w, r)
-	default:
-		w.WriteHeader(500)
-	}
 }
 
 func (wh *WXHandler) Handle(fn interface{}) error {

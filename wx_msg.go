@@ -46,9 +46,9 @@ type (
 	}
 	LinkReq struct {
 		MsgRequest
+		Url         string
 		Title       string
 		Description string
-		Url         string
 	}
 )
 
