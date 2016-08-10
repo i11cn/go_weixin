@@ -136,6 +136,10 @@ func (wh *WXHandler) do_request(w http.ResponseWriter, body []byte, t string) {
 			w.WriteHeader(500)
 			return
 		}
+		if reflect.ValueOf(resp).IsNil() {
+			w.Write([]byte("success"))
+			return
+		}
 		d, err := xml.Marshal(resp)
 		if err != nil {
 			wh.Logger.Error("处理", t, "响应失败: ", err.Error())
@@ -146,7 +150,7 @@ func (wh *WXHandler) do_request(w http.ResponseWriter, body []byte, t string) {
 			w.Header().Set("Content-Type", "application/xml;charset=utf-8")
 			w.Write(d)
 		} else {
-			w.Write([]byte(""))
+			w.Write([]byte("success"))
 		}
 	}
 	switch t {
@@ -198,7 +202,6 @@ func (wh *WXHandler) do_event(w http.ResponseWriter, body []byte, e string) {
 			w.WriteHeader(501)
 			return
 		}
-
 		if err := xml.Unmarshal(body, o); err != nil {
 			wh.Logger.Error("解析xml出错: ", err.Error())
 			w.WriteHeader(500)
@@ -208,6 +211,10 @@ func (wh *WXHandler) do_event(w http.ResponseWriter, body []byte, e string) {
 		if err != nil {
 			wh.Logger.Error("处理", e, "事件失败: ", err.Error())
 			w.WriteHeader(500)
+			return
+		}
+		if reflect.ValueOf(resp).IsNil() {
+			w.Write([]byte("success"))
 			return
 		}
 		d, err := xml.Marshal(resp)
@@ -220,7 +227,7 @@ func (wh *WXHandler) do_event(w http.ResponseWriter, body []byte, e string) {
 			w.Header().Set("Content-Type", "application/xml;charset=utf-8")
 			w.Write(d)
 		} else {
-			w.Write([]byte(""))
+			w.Write([]byte("success"))
 		}
 	}
 	switch e {
@@ -274,6 +281,7 @@ func (wh *WXHandler) doPost(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(500)
 		return
 	}
+	g_mp_id = req.ToUserName
 	wh.Logger.Trace(req)
 	t := strings.ToUpper(req.MsgType)
 	if t == "EVENT" {

@@ -35,6 +35,7 @@ type (
 		WXTokenMgr
 		handler *WXHandler
 		msg     *WXMessage
+		tpl     TemplateMgr
 	}
 )
 
@@ -74,6 +75,13 @@ func (wx *Weixin) GetHandler() *WXHandler {
 		wx.handler = NewHandler(&wx.WXGlobalInfo, wx)
 	}
 	return wx.handler
+}
+
+func (wx *Weixin) GetTemplateMgr() TemplateMgr {
+	if wx.tpl == nil {
+		wx.tpl = &tpl_mgr_impl{NewClient(wx, "api.weixin.qq.com", 0, "/cgi-bin/template", "access_token"), NewClient(wx, "api.weixin.qq.com", 0, "/cgi-bin/message/template", "access_token")}
+	}
+	return wx.tpl
 }
 
 func (wx *Weixin) Start() error {
