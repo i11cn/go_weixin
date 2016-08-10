@@ -74,6 +74,8 @@ func dummy_menu_view(string, time.Time, string) (interface{}, error) {
 	return nil, nil
 }
 
+func dummy_template_job(string, time.Time, int64, string) {}
+
 func (wh *WXHandler) handle(fn interface{}) error {
 	switch reflect.TypeOf(fn) {
 	case reflect.TypeOf(dummy_text_req):
@@ -102,6 +104,8 @@ func (wh *WXHandler) handle(fn interface{}) error {
 		wh.menu_click_handle = fn.(func(string, time.Time, string) (interface{}, error))
 	case reflect.TypeOf(dummy_menu_view):
 		wh.menu_view_handle = fn.(func(string, time.Time, string) (interface{}, error))
+	case reflect.TypeOf(dummy_template_job):
+		wh.tpl_msg_handle = fn.(func(string, time.Time, int64, string))
 	default:
 		return errors.New("注册的方法类型不正确")
 	}
@@ -230,6 +234,20 @@ func (wh *WXHandler) do_event(w http.ResponseWriter, body []byte, e string) {
 			w.Write([]byte("success"))
 		}
 	}
+	notice := func(f interface{}, o interface{}, fn func()) {
+		if reflect.ValueOf(f).IsNil() {
+			wh.Logger.Error("没有Handle该事件: ", e)
+			w.WriteHeader(501)
+			return
+		}
+		if err := xml.Unmarshal(body, o); err != nil {
+			wh.Logger.Error("解析xml出错: ", err.Error())
+			w.WriteHeader(500)
+			return
+		}
+		fn()
+		w.Write([]byte("success"))
+	}
 	switch e {
 	case "SUBSCRIBE":
 		o := &Subscribe{}
@@ -260,6 +278,11 @@ func (wh *WXHandler) do_event(w http.ResponseWriter, body []byte, e string) {
 		o := &MenuView{}
 		wrapper(wh.menu_view_handle, o, func() (interface{}, error) {
 			return wh.menu_view_handle(o.UserName(), o.GetCreateTime(), o.Url)
+		})
+	case "TEMPLATESENDJOBFINISH":
+		o := &TemplateSendJob{}
+		notice(wh.tpl_msg_handle, o, func() {
+			wh.tpl_msg_handle(o.UserName(), o.GetCreateTime(), o.MsgID, o.Status)
 		})
 	default:
 		wh.Logger.Error("客户端发送了不正确的事件类型：", e)

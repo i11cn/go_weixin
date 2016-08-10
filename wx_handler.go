@@ -21,6 +21,8 @@ type (
 	MenuClickHandle   func(user string, t time.Time, key string) (interface{}, error)
 	MenuViewHandle    func(user string, t time.Time, url string) (interface{}, error)
 
+	TplMessageHandle func(user string, t time.Time, msg_id int64, status string)
+
 	WXHandler struct {
 		WXComponent
 
@@ -39,6 +41,8 @@ type (
 		location_handle    LocationHandle
 		menu_click_handle  MenuClickHandle
 		menu_view_handle   MenuViewHandle
+
+		tpl_msg_handle TplMessageHandle
 	}
 )
 
