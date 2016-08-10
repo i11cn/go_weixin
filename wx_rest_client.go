@@ -15,6 +15,7 @@ type (
 
 func NewClient(wx *Weixin, host string, port int, uri, token_name string) *WXClient {
 	ret := &WXClient{rc.NewClient(host, port, uri), wx, token_name}
+	ret.rest_client.SSL = true
 	return ret
 }
 
