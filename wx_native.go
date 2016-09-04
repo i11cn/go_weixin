@@ -1,0 +1,5 @@
+package weixin
+
+import ()
+
+type ()

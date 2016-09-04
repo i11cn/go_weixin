@@ -1,221 +1,105 @@
 package weixin
 
 import (
-	"encoding/xml"
 	"github.com/i11cn/go_logger"
+	rest "github.com/i11cn/go_rest_client"
+	"math/rand"
 	"net/http"
 	"time"
 )
 
 type (
-	WXRequestInfo struct {
-		ToUserName   string
-		FromUserName string
-		CreateTime   time.Duration
-		MsgId        int64
-	}
-
-	WXLocationRequest struct {
-		Location_Y float64
-		Location_X float64
-		Scale      int
-		Label      string
-	}
-
-	WXLinkRequest struct {
-		Title       string
-		Description string
-		Url         string
-	}
-
-	WXLocationEvent struct {
-		Longitude float64
-		Latitude  float64
-		Precision float64
-	}
-
-	WXEvent struct {
-		Event    string
-		EventKey string
-		Ticket   string
-		WXLocationEvent
-	}
-
-	WXRequest struct {
-		WXRequestInfo
-		MsgType string
-		Content string
-		WXLocationRequest
-		WXLinkRequest
-		MediaId      string
-		PicUrl       string
-		Format       string
-		ThumbMediaId string
-		WXEvent
-	}
-
-	WXResponseInfo struct {
-		XMLName      xml.Name `xml:"xml"`
-		ToUserName   string
-		FromUserName string
-		CreateTime   int64
-		MsgType      string
-	}
-
-	WXTextResponse struct {
-		WXResponseInfo
-		Content string
-	}
-
-	WXImageResponse struct {
-		WXResponseInfo
-		MediaId string `xml:"Image>MediaId"`
-	}
-
-	WXVoiceResponse struct {
-		WXResponseInfo
-		MediaId string `xml:"Voice>MediaId"`
-	}
-
-	WXVideoResponse struct {
-		WXResponseInfo
-		MediaId     string `xml:"Video>MediaId"`
-		Title       string `xml:"Video>Title"`
-		Description string `xml:"Video>Description"`
-	}
-
-	WXMusicResponse struct {
-		WXResponseInfo
-		Title        string `xml:"Music>Title"`
-		Description  string `xml:"Music>Description"`
-		MusicUrl     string `xml:"Music>MusicUrl"`
-		HQMusicUrl   string `xml:"Music>HQMusicUrl"`
-		ThumbMediaId string `xml:"Music>ThumbMediaId"`
-	}
-
-	WXNewsItem struct {
-		Title       string
-		Description string
-		PicUrl      string
-		Url         string
-	}
-
-	WXNewsResponse struct {
-		WXResponseInfo
-		ArticleCount int
-		Items        []WXNewsItem `xml:"Articles>item"`
-	}
-
 	WXConfig struct {
-		Token     string
-		MsgKey    string
-		AppID     string
-		AppSecret string
+		Token          string
+		EncodingAESKey string
+		AppID          string
+		AppSecret      string
+	}
+
+	WXGlobalInfo struct {
+		Config     WXConfig
+		Logger     *logger.Logger
+		RestClient *rest.RestClient
+	}
+
+	WXComponent struct {
+		*WXGlobalInfo
+		*Weixin
+	}
+
+	WXMessage struct {
+	}
+
+	Weixin struct {
+		WXGlobalInfo
+		WXTokenMgr
+		handler *WXHandler
+		msg     *WXMessage
+		tpl     TemplateMgr
 	}
 )
 
-type (
-	OnValidateFail     func(w http.ResponseWriter, r *http.Request)
-	UnsupportedRequest func(w http.ResponseWriter, info *WXRequestInfo)
-	OnRequestError     func(w http.ResponseWriter, r *http.Request)
-
-	OnTextRequest     func(w http.ResponseWriter, info *WXRequestInfo, content string)
-	OnLocationRequest func(w http.ResponseWriter, info *WXRequestInfo, pos *WXLocationRequest)
-	OnImageRequest    func(w http.ResponseWriter, info *WXRequestInfo, mid, url string)
-	OnVoiceRequest    func(w http.ResponseWriter, info *WXRequestInfo, mid, format string)
-	OnVideoRequest    func(w http.ResponseWriter, info *WXRequestInfo, mid, thumb string, short bool)
-	OnLinkRequest     func(w http.ResponseWriter, info *WXRequestInfo, req *WXLinkRequest)
-
-	OnSubscribeEvent func(w http.ResponseWriter, info *WXRequestInfo, sub bool)
-	OnQRScanEvent    func(w http.ResponseWriter, info *WXRequestInfo, key, ticket string)
-	OnLocationEvent  func(w http.ResponseWriter, info *WXRequestInfo, pos *WXLocationEvent)
-	OnMenuEvent      func(w http.ResponseWriter, info *WXRequestInfo, key string)
-	OnLinkEvent      func(w http.ResponseWriter, info *WXRequestInfo, url string)
+var (
+	g_log *logger.Logger = logger.GetLogger("weixin")
 )
 
-func (info *WXRequestInfo) Response(w http.ResponseWriter, v interface{}) {
-	output, err := xml.MarshalIndent(v, "", "")
-	if err != nil {
-		go_logger.GetLogger("weixin").Error("创建响应xml失败:", err.Error())
-		w.WriteHeader(500)
-		return
+func init() {
+	rand.Seed(time.Now().UnixNano())
+	g_log.AddAppender(logger.NewConsoleAppender("%T [%N] %L (%f) : %M"))
+	g_log.SetLevel(logger.INFO)
+	//g_log.AddAppender(logger.NewSplittedFileAppender("%T [%N] %L (%f) : %M", "weixin.log", 24*time.Hour))
+}
+
+func (wc WXComponent) SetGlobalInfo(info *WXGlobalInfo) {
+	wc.WXGlobalInfo = info
+}
+
+func (wc WXComponent) GetToken() string {
+	return wc.GetAccessToken().GetToken()
+}
+
+func NewWeixin(cfg WXConfig) *Weixin {
+	ret := &Weixin{WXGlobalInfo: WXGlobalInfo{cfg, g_log, rest.NewClient("api.weixin.qq.com", 0, "/cgi-bin")}}
+	ret.WXGlobalInfo.RestClient.SSL = true
+	ret.WXTokenMgr = DefaultTokenMgr(&ret.WXGlobalInfo)
+	return ret
+}
+
+func (wx *Weixin) SetLogger(log *logger.Logger) *Weixin {
+	wx.Logger = log
+	return wx
+}
+
+func (wx *Weixin) GetHandler() *WXHandler {
+	if wx.handler == nil {
+		wx.handler = NewHandler(&wx.WXGlobalInfo, wx)
 	}
-	w.Write(output)
-	go_logger.GetLogger("weixin").Trace("给用户返回响应:", string(output))
+	return wx.handler
 }
 
-func (info *WXRequestInfo) ResponseText(w http.ResponseWriter, content string) {
-	resp := WXTextResponse{}
-	resp.ToUserName = info.FromUserName
-	resp.FromUserName = info.ToUserName
-	resp.CreateTime = time.Now().Unix()
-	resp.MsgType = "text"
-	resp.Content = content
-	info.Response(w, resp)
-}
-
-func (info *WXRequestInfo) ResponseImage(w http.ResponseWriter, id string) {
-	resp := WXImageResponse{}
-	resp.ToUserName = info.FromUserName
-	resp.FromUserName = info.ToUserName
-	resp.CreateTime = time.Now().Unix()
-	resp.MsgType = "image"
-	resp.MediaId = id
-	info.Response(w, resp)
-}
-
-func (info *WXRequestInfo) ResponseVoice(w http.ResponseWriter, id string) {
-	resp := WXVoiceResponse{}
-	resp.ToUserName = info.FromUserName
-	resp.FromUserName = info.ToUserName
-	resp.CreateTime = time.Now().Unix()
-	resp.MsgType = "voice"
-	resp.MediaId = id
-	info.Response(w, resp)
-}
-
-func (info *WXRequestInfo) ResponseVideo(w http.ResponseWriter, id, title, desc string) {
-	resp := WXVideoResponse{}
-	resp.ToUserName = info.FromUserName
-	resp.FromUserName = info.ToUserName
-	resp.CreateTime = time.Now().Unix()
-	resp.MsgType = "video"
-	resp.MediaId = id
-	resp.Title = title
-	resp.Description = desc
-	info.Response(w, resp)
-}
-
-func (info *WXRequestInfo) ResponseMusic(w http.ResponseWriter, id, title, desc, url, hqurl string) {
-	resp := WXMusicResponse{}
-	resp.ToUserName = info.FromUserName
-	resp.FromUserName = info.ToUserName
-	resp.CreateTime = time.Now().Unix()
-	resp.MsgType = "music"
-	resp.ThumbMediaId = id
-	resp.Title = title
-	resp.Description = desc
-	resp.MusicUrl = url
-	resp.HQMusicUrl = hqurl
-	info.Response(w, resp)
-}
-
-func (info *WXRequestInfo) ResponseNews(w http.ResponseWriter, articles []WXNewsItem) {
-	resp := WXNewsResponse{}
-	resp.ToUserName = info.FromUserName
-	resp.FromUserName = info.ToUserName
-	resp.CreateTime = time.Now().Unix()
-	resp.MsgType = "news"
-	resp.ArticleCount = len(articles)
-	resp.Items = articles
-	info.Response(w, resp)
-}
-
-func NewWeixinServ(conf *WXConfig, uc interface{}) *Weixin {
-	serv := &Weixin{WXConfig: *conf, user_custom: uc}
-	if serv.init() {
-		return serv
-	} else {
-		return nil
+func (wx *Weixin) GetTemplateMgr() TemplateMgr {
+	if wx.tpl == nil {
+		wx.tpl = &tpl_mgr_impl{NewClient(wx, "api.weixin.qq.com", 0, "/cgi-bin/template", "access_token"), NewClient(wx, "api.weixin.qq.com", 0, "/cgi-bin/message/template", "access_token")}
 	}
+	return wx.tpl
+}
+
+func (wx *Weixin) Start() error {
+	server := &http.Server{Handler: wx.GetHandler()}
+	return server.ListenAndServe()
+}
+
+func (wx *Weixin) StartTLS(cert, key string) error {
+	server := &http.Server{Handler: wx.GetHandler()}
+	return server.ListenAndServeTLS(cert, key)
+}
+
+func (wx *Weixin) StartAt(addr string) error {
+	server := &http.Server{Addr: addr, Handler: wx.GetHandler()}
+	return server.ListenAndServe()
+}
+
+func (wx *Weixin) StartTLSAt(addr string, cert, key string) error {
+	server := &http.Server{Addr: addr, Handler: wx.GetHandler()}
+	return server.ListenAndServeTLS(cert, key)
 }
